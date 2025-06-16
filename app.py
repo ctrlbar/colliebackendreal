@@ -4,8 +4,7 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-print("Using OPENAI_API_KEY:", client.api_key)
+client = OpenAI()
 
 @app.route("/api", methods=["POST"])
 def chat():
@@ -32,4 +31,4 @@ def chat():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
