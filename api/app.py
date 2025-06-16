@@ -1,21 +1,22 @@
+# api/app.py
+
+from flask import Flask, request, jsonify
 import os
 import openai
-import json
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
+app = Flask(__name__)
 
-def handler(request):
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+@app.route("/api", methods=["POST"])
+def chat():
+    data = request.get_json()
+    prompt = data.get("prompt", "")
+
+    if not openai.api_key:
+        return jsonify({"error": "API key not configured"}), 500
+
     try:
-        data = request.get_json()
-        prompt = data.get("prompt", "")
-
-        if not OPENAI_API_KEY:
-            return {
-                "statusCode": 500,
-                "body": json.dumps({"error": "API key not configured"})
-            }
-
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -24,14 +25,7 @@ def handler(request):
             ],
         )
         answer = response.choices[0].message.content.strip()
-
-        return {
-            "statusCode": 200,
-            "body": json.dumps({"answer": answer})
-        }
+        return jsonify({"answer": answer})
 
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
+        return jsonify({"error": str(e)}), 500
