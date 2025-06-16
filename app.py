@@ -1,6 +1,7 @@
 import os
 import openai
 from flask import Flask, request, jsonify
+from openai.error import RateLimitError, OpenAIError
 
 app = Flask(__name__)
 
@@ -26,6 +27,11 @@ def chat():
 
         return jsonify({"answer": answer})
 
+    except RateLimitError:
+        return jsonify({"error": "OpenAI API quota exceeded. Please try again later."}), 429
+    except OpenAIError as e:
+        # Handle other OpenAI API errors here
+        return jsonify({"error": f"OpenAI API error: {str(e)}"}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
