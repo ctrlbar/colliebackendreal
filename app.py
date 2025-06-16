@@ -15,7 +15,7 @@ def chat():
         if not openai.api_key:
             return jsonify({"error": "API key not configured"}), 500
 
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are an expert college advisor."},
