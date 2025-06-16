@@ -1,5 +1,3 @@
 openai
 Flask
-request
-jsonify
-os
+requests
