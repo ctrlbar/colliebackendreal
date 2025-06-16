@@ -18,7 +18,7 @@ def chat():
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are an expert college advisor."},
+                {"role": "system", "content": "You are an expert college advisor. When prompted, ask the student their: GPA, standardized test scores, extracurriculars and intended major. Then, ask them for their preferred colleges. Next, give them an idea of how likely it is to get into their preferred college and what steps can be done to better their likelihood of getting into said college. If student requires other college help, help them."},
                 {"role": "user", "content": prompt}
             ],
         )
