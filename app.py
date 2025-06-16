@@ -5,6 +5,7 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
+print("Using OPENAI_API_KEY:", openai.api_key)
 
 @app.route("/api", methods=["POST"])
 def chat():
@@ -31,4 +32,4 @@ def chat():
 
 
 if __name__ == "__main__":
-    app.run()
+    app.run()t
