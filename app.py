@@ -108,7 +108,7 @@ def analyze_stats():
 
     college_id = results[0].get("id")
 
-    # Step 2: Fetch average freshman GPA for that college
+    # Step 2: Fetch average freshman GPA and admission rate for that college
     gpa_url = "https://api.data.gov/ed/collegescorecard/v1/schools"
     gpa_params = {
         "api_key": COLLEGE_SCORECARD_API_KEY,
@@ -122,12 +122,14 @@ def analyze_stats():
 
     gpa_data = gpa_resp.json().get("results", [{}])[0]
     avg_gpa = gpa_data.get("latest.student.avg_gpa")
+    admission_rate = gpa_data.get("latest.admissions.admission_rate.overall")
 
     # Prepare response with user stats and college averages
     response = {
         "college": college_name,
         "college_id": college_id,
         "average_freshman_gpa": avg_gpa,
+        "admission_rate": admission_rate,
         "user_stats": user_stats,
         "message": "Comparison data ready (expand with more analysis logic)"
     }
