@@ -24,9 +24,14 @@ To estimate admission chances, collect:
 4. Extracurriculars
 5. Intended major
 
+If a college's average GPA or SAT/ACT score is not available, estimate them using these fallback rules:
+- If admission rate < 15% → assume GPA 3.9+, SAT 1450+
+- If admission rate between 15% and 40% → assume GPA 3.7, SAT 1300
+- If admission rate > 40% → assume GPA 3.3, SAT 1150
+
 LOOK THROUGH MEMORY TO AVOID BEING REDUNDANT IN ASKING QUESTIONS.
 
-If they ask other questions about college admissions, answer clearly. try to be concise. GIVE THEM A PERCENTAGE ON HOW LIKELY THE USER WILL GET IN
+Give your response in a helpful, clear tone. Try to be concise. ALWAYS GIVE A PERCENTAGE ESTIMATE for how likely the student is to get into the selected college.
 """
 }
 
@@ -73,7 +78,7 @@ def chat():
         print("Error occurred:", str(e))
         return jsonify({"error": str(e)}), 500
 
-# Replace this with your College Scorecard API key stored as env variable
+
 COLLEGE_SCORECARD_API_KEY = os.getenv("COLLEGE_SCORECARD_API_KEY")
 
 @app.route("/analyze/stats", methods=["POST"])
@@ -89,7 +94,7 @@ def analyze_stats():
     if not college_name or not user_stats:
         return jsonify({"error": "Missing college name or user stats"}), 400
 
-    # Step 1: Get college ID from College Scorecard API by college name
+    # Step 1: Get college ID
     search_url = "https://api.data.gov/ed/collegescorecard/v1/schools"
     params = {
         "api_key": COLLEGE_SCORECARD_API_KEY,
@@ -108,30 +113,53 @@ def analyze_stats():
 
     college_id = results[0].get("id")
 
-    # Step 2: Fetch average freshman GPA and admission rate for that college
-    gpa_url = "https://api.data.gov/ed/collegescorecard/v1/schools"
-    gpa_params = {
+    # Step 2: Fetch admission rate and SAT average
+    info_url = "https://api.data.gov/ed/collegescorecard/v1/schools"
+    info_params = {
         "api_key": COLLEGE_SCORECARD_API_KEY,
         "id": college_id,
-        "fields": "latest.admissions.admission_rate.overall,latest.student.avg_gpa"
+        "fields": "latest.admissions.admission_rate.overall,latest.admissions.sat_scores.average.overall"
     }
 
-    gpa_resp = requests.get(gpa_url, params=gpa_params)
-    if gpa_resp.status_code != 200:
-        return jsonify({"error": "Failed to fetch GPA data"}), 500
+    info_resp = requests.get(info_url, params=info_params)
+    if info_resp.status_code != 200:
+        return jsonify({"error": "Failed to fetch admission data"}), 500
 
-    gpa_data = gpa_resp.json().get("results", [{}])[0]
-    avg_gpa = gpa_data.get("latest.student.avg_gpa")
-    admission_rate = gpa_data.get("latest.admissions.admission_rate.overall")
+    info_data = info_resp.json().get("results", [{}])[0]
+    admission_rate = info_data.get("latest.admissions.admission_rate.overall")
+    avg_sat = info_data.get("latest.admissions.sat_scores.average.overall")
 
-    # Prepare response with user stats and college averages
+    # Fallback estimates if missing
+    estimated_gpa = None
+    estimated_sat = avg_sat
+
+    if admission_rate is not None:
+        if admission_rate < 0.15:
+            estimated_gpa = 3.9
+            if not avg_sat:
+                estimated_sat = 1450
+        elif admission_rate < 0.40:
+            estimated_gpa = 3.7
+            if not avg_sat:
+                estimated_sat = 1300
+        else:
+            estimated_gpa = 3.3
+            if not avg_sat:
+                estimated_sat = 1150
+    else:
+        # No admission rate available
+        estimated_gpa = "unknown"
+        estimated_sat = estimated_sat or "unknown"
+
     response = {
         "college": college_name,
         "college_id": college_id,
-        "average_freshman_gpa": avg_gpa,
         "admission_rate": admission_rate,
+        "average_sat": avg_sat,
+        "estimated_gpa_based_on_selectivity": estimated_gpa,
+        "used_fallback_sat": avg_sat is None,
         "user_stats": user_stats,
-        "message": "Comparison data ready (expand with more analysis logic)"
+        "message": "Comparison data ready with fallback estimates if needed"
     }
 
     return jsonify(response)
