@@ -15,69 +15,64 @@ SYSTEM_PROMPT = {
 
 Your job is to help users estimate their chances of getting into a specific college and offer helpful guidance.
 
-When asked something like “What are my chances at UIUC?”, recognize that “UIUC” is the college. Only ask for the college if it hasn’t been mentioned yet.
-
-To estimate admission chances, collect:
-1. College name (if not mentioned)
+To estimate admission chances, review the following if submitted:
+1. College name and its selectivity
 2. GPA
-3. SAT/ACT score (or if not submitting)
-4. Extracurriculars
-5. Intended major
+3. SAT/ACT score 
+4. Class rank and AP count if available
+5. Extracurriculars
+6. Honors & awards
+7. Clubs or other activities
 
-If a college's average GPA or SAT/ACT score is not available, estimate them using these fallback rules:
-- If admission rate < 15% → assume GPA 3.9+, SAT 1450+
-- If admission rate between 15% and 40% → assume GPA 3.7, SAT 1300
-- If admission rate > 40% → assume GPA 3.3, SAT 1150
+If a college's gpa, # of ap classes taken, or SAT/ACT score is not available, estimate them using these fallback rules:
+- If admission rate < 15% → GPA 3.9+, SAT 1450+, ACT 33+, top 5% of class, 10+ APs
+- If admission rate 15–40% → GPA 3.7, SAT 1300, ACT 28, top 10–20%, 6–9 APs
+- If admission rate > 40% → GPA 3.3, SAT 1150, ACT 23, top 30–40%, 3–5 APs
 
-LOOK THROUGH MEMORY TO AVOID BEING REDUNDANT IN ASKING QUESTIONS.
-
-Give your response in a helpful, clear tone. Try to be concise. ALWAYS GIVE A PERCENTAGE ESTIMATE for how likely the student is to get into the selected college.
+Based on the selectivity level, highlight strong points in the student profile and identify areas that may need improvement. Then provide a realistic percentage estimate of their admission chances.
 """
 }
 
-@app.route("/api", methods=["POST"])
-def chat():
+@app.route("/api/gpt-summary", methods=["POST"])
+def gpt_summary():
     try:
         data = request.get_json()
 
-        prompt = data.get("prompt", "").strip()
-        session_id = data.get("session_id")
+        college = data.get("college")
+        user_stats = data.get("user_stats", {})
+        extracurriculars = data.get("extracurriculars", "")
+        honors = data.get("honors", "")
+        clubs = data.get("clubs", "")
+        admission_rate = data.get("admission_rate")
+        average_gpa = data.get("average_gpa")
 
-        if not client.api_key:
-            return jsonify({"error": "API key not configured"}), 500
+        if not college or not user_stats:
+            return jsonify({"error": "Missing college or user stats"}), 400
 
-        if not prompt:
-            return jsonify({"error": "Prompt cannot be empty"}), 400
+        prompt = f"Provide a summary comparing a student's stats to {college}. "
+        prompt += f"Student GPA: {user_stats.get('GPA', 'N/A')}, "
+        prompt += f"SAT Score: {user_stats.get('SAT Score', 'N/A')}, "
+        prompt += f"Extracurriculars: {extracurriculars}, Honors: {honors}, Clubs: {clubs}. "
 
-        # If no session_id, create a new one and initialize conversation
-        if not session_id:
-            session_id = str(uuid.uuid4())
-            conversations[session_id] = [SYSTEM_PROMPT]
-        elif session_id not in conversations:
-            # If session_id sent but unknown, also initialize
-            conversations[session_id] = [SYSTEM_PROMPT]
+        if average_gpa is not None:
+            prompt += f"Average GPA at school: {average_gpa:.2f}. "
+        if admission_rate is not None:
+            prompt += f"Admission rate: {admission_rate * 100:.1f}%. "
 
-        # Append user's message
-        conversations[session_id].append({"role": "user", "content": prompt})
+        prompt += "Based on this data, provide a concise summary and likelihood of admission."
 
-        # Call OpenAI chat completion API with full conversation history
+        messages = [SYSTEM_PROMPT, {"role": "user", "content": prompt}]
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=conversations[session_id]
+            messages=messages
         )
 
         answer = response.choices[0].message.content.strip()
-
-        # Append assistant's reply to conversation history
-        conversations[session_id].append({"role": "assistant", "content": answer})
-
-        # Return answer AND session_id (so client can save it)
-        return jsonify({"answer": answer, "session_id": session_id})
+        return jsonify({"summary": answer})
 
     except Exception as e:
         print("Error occurred:", str(e))
         return jsonify({"error": str(e)}), 500
-
 
 COLLEGE_SCORECARD_API_KEY = os.getenv("COLLEGE_SCORECARD_API_KEY")
 
@@ -94,7 +89,6 @@ def analyze_stats():
     if not college_name or not user_stats:
         return jsonify({"error": "Missing college name or user stats"}), 400
 
-    # Step 1: Get college ID
     search_url = "https://api.data.gov/ed/collegescorecard/v1/schools"
     params = {
         "api_key": COLLEGE_SCORECARD_API_KEY,
@@ -113,7 +107,6 @@ def analyze_stats():
 
     college_id = results[0].get("id")
 
-    # Step 2: Fetch admission rate and SAT average
     info_url = "https://api.data.gov/ed/collegescorecard/v1/schools"
     info_params = {
         "api_key": COLLEGE_SCORECARD_API_KEY,
@@ -129,27 +122,32 @@ def analyze_stats():
     admission_rate = info_data.get("latest.admissions.admission_rate.overall")
     avg_sat = info_data.get("latest.admissions.sat_scores.average.overall")
 
-    # Fallback estimates if missing
     estimated_gpa = None
     estimated_sat = avg_sat
+    expected_class_rank_percentile = None
+    expected_num_aps = None
 
     if admission_rate is not None:
         if admission_rate < 0.15:
             estimated_gpa = 3.9
-            if not avg_sat:
-                estimated_sat = 1450
+            estimated_sat = estimated_sat or 1450
+            expected_class_rank_percentile = "top 5%"
+            expected_num_aps = "10+"
         elif admission_rate < 0.40:
             estimated_gpa = 3.7
-            if not avg_sat:
-                estimated_sat = 1300
+            estimated_sat = estimated_sat or 1300
+            expected_class_rank_percentile = "top 10–20%"
+            expected_num_aps = "6–9"
         else:
             estimated_gpa = 3.3
-            if not avg_sat:
-                estimated_sat = 1150
+            estimated_sat = estimated_sat or 1150
+            expected_class_rank_percentile = "top 30–40%"
+            expected_num_aps = "3–5"
     else:
-        # No admission rate available
         estimated_gpa = "unknown"
         estimated_sat = estimated_sat or "unknown"
+        expected_class_rank_percentile = "unknown"
+        expected_num_aps = "unknown"
 
     response = {
         "college": college_name,
@@ -157,13 +155,14 @@ def analyze_stats():
         "admission_rate": admission_rate,
         "average_sat": avg_sat,
         "estimated_gpa_based_on_selectivity": estimated_gpa,
+        "expected_class_rank_percentile": expected_class_rank_percentile,
+        "expected_num_aps": expected_num_aps,
         "used_fallback_sat": avg_sat is None,
         "user_stats": user_stats,
         "message": "Comparison data ready with fallback estimates if needed"
     }
 
     return jsonify(response)
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
