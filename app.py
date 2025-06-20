@@ -42,6 +42,7 @@ def gpt_summary():
         user_stats = data.get("user_stats", {})
         extracurriculars = data.get("extracurriculars", "")
         honors = data.get("honors", "")
+        major = data.get("major", "N/A")
         clubs = data.get("clubs", "")
         admission_rate = data.get("admission_rate")
         average_gpa = data.get("average_gpa")
@@ -50,6 +51,7 @@ def gpt_summary():
             return jsonify({"error": "Missing college or user stats"}), 400
 
         prompt = f"Provide a summary comparing a student's stats to {college}. "
+        prompt += f"Student Major: {major}. "  # <-- Add major here
         prompt += f"Student GPA: {user_stats.get('GPA', 'N/A')}, "
         prompt += f"SAT Score: {user_stats.get('SAT Score', 'N/A')}, "
         prompt += f"Extracurriculars: {extracurriculars}, Honors: {honors}, Clubs: {clubs}. "
