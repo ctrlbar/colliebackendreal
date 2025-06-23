@@ -42,31 +42,64 @@ def gpt_summary():
         if not college or not user_stats:
             return jsonify({"error": "Missing college or user stats"}), 400
 
-        prompt = f"Provide a summary comparing a student's stats to {college}. "
-        prompt += f"Student Major: {major}. "  # <-- Add major here
-        prompt += f"Student GPA: {user_stats.get('GPA', 'N/A')}, "
-        prompt += f"SAT Score: {user_stats.get('SAT Score', 'N/A')}, "
-        prompt += f"Extracurriculars: {extracurriculars}, Honors: {honors}, Clubs: {clubs}. "
+        prompt = f"""Here is a student's college application profile:
 
-        if average_gpa is not None:
-            prompt += f"Average GPA at school: {average_gpa:.2f}. "
-        if admission_rate is not None:
-            prompt += f"Admission rate: {admission_rate * 100:.1f}%. "
+College: {college}
+Major: {major}
+GPA: {user_stats.get('GPA', 'N/A')}
+SAT: {user_stats.get('SAT Score', 'N/A')}
+ACT: {user_stats.get('ACT Score', 'N/A')}
+Extracurriculars: {extracurriculars}
+Honors and Awards: {honors}
+Clubs/Other: {clubs}
+Average GPA at college: {average_gpa if average_gpa is not None else 'N/A'}
+Admission rate: {admission_rate * 100:.1f}% if known
 
-        prompt += "Based on this data, provide a concise summary and likelihood of admission."
+Please provide a JSON array of category ratings like this:
 
-        messages = [SYSTEM_PROMPT, {"role": "user", "content": prompt}]
+[
+  {{ "title": "Academics", "score": 80, "explanation": "Strong GPA, but SAT could be improved." }},
+  {{ "title": "Extracurriculars", "score": 65, "explanation": "Has multiple clubs, could use more leadership." }},
+  {{ "title": "Honors and Awards", "score": 50, "explanation": "Few listed, consider entering competitions." }},
+  {{ "title": "Uniqueness", "score": 40, "explanation": "Standard profile. Add a unique project or initiative." }},
+  {{ "title": "Impact", "score": 55, "explanation": "Good foundation. Expand volunteering or public work." }}
+]
+
+Return **only** the JSON array with no introduction or extra text.
+"""
+
+        messages = [
+            {
+                "role": "system",
+                "content": "You are an expert college admissions advisor. Respond with only the JSON array of category ratings as described."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=messages
         )
 
         answer = response.choices[0].message.content.strip()
-        return jsonify({"summary": answer})
+
+        # Try parsing the JSON response
+        import json
+        try:
+            ratings = json.loads(answer)
+        except json.JSONDecodeError as e:
+            print("Failed to parse GPT JSON:", answer)
+            return jsonify({"error": "GPT response was not valid JSON"}), 500
+
+        return jsonify(ratings)
 
     except Exception as e:
         print("Error occurred:", str(e))
         return jsonify({"error": str(e)}), 500
+
 
 COLLEGE_SCORECARD_API_KEY = os.getenv("COLLEGE_SCORECARD_API_KEY")
 
