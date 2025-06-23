@@ -29,6 +29,70 @@ You are NOT generating a summary or acceptance likelihood, only an improvement a
 
 COLLEGE_SCORECARD_API_KEY = os.getenv("COLLEGE_SCORECARD_API_KEY")
 
+@app.route("/api/gpt-summary", methods=["POST"])
+def gpt_summary():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data received"}), 400
+
+    college = data.get("college")
+    user_stats = data.get("user_stats")
+
+    if not college or not user_stats:
+        return jsonify({"error": "Missing college or user_stats"}), 400
+
+    # Build messages for OpenAI chat completion
+    messages = [
+        SYSTEM_PROMPT,
+        {
+            "role": "user",
+            "content": (
+                f"Analyze the following student stats compared to the college '{college}':\n"
+                f"{user_stats}\n\n"
+                "Provide:\n"
+                "- A numeric admission strength score from 0 (very weak) to 100 (very strong).\n"
+                "- Specific actionable suggestions to improve the application.\n"
+                "Return ONLY a JSON object with keys 'score' (int) and 'advice' (string)."
+            )
+        }
+    ]
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.3,
+            max_tokens=500,
+            stop=None,
+        )
+    except Exception as e:
+        return jsonify({"error": f"OpenAI API error: {str(e)}"}), 500
+
+    # The GPT response content
+    content = response.choices[0].message.content.strip()
+
+    # Try parsing JSON from GPT's response safely
+    import json
+    try:
+        json_response = json.loads(content)
+        score = json_response.get("score")
+        advice = json_response.get("advice")
+        if not isinstance(score, int) or not isinstance(advice, str):
+            raise ValueError("Invalid types in GPT response JSON")
+    except Exception:
+        # If GPT doesn't return valid JSON, fallback to raw text
+        return jsonify({
+            "error": "GPT response parsing failed",
+            "raw_response": content
+        }), 500
+
+    return jsonify({
+        "college": college,
+        "score": score,
+        "advice": advice
+    })
+
+
 @app.route("/analyze/stats", methods=["POST"])
 def analyze_stats():
     data = request.get_json()
