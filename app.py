@@ -37,7 +37,19 @@ def gpt_summary():
     if not college or not user_stats:
         return jsonify({"error": "Missing college or user_stats"}), 400
 
-    # Compose the user prompt with all info but no request for summary or scores
+    # New system prompt asks GPT to return detailed category ratings
+    system_prompt = {
+        "role": "system",
+        "content": (
+            "You are Collie, an expert college advisor. "
+            "Analyze the student's stats compared to their target college and provide "
+            "a JSON array of category ratings for the application. Each object must have: "
+            "\"title\" (string), \"score\" (0-100 number), and \"explanation\" (string). "
+            "Categories include: Academics, Extracurriculars, Honors, Uniqueness, and Impact. "
+            "Return ONLY the JSON array, no extra text."
+        )
+    }
+
     user_content = (
         f"Analyze the student's profile compared to the college '{college}':\n"
         f"Stats: {user_stats}\n"
@@ -45,12 +57,11 @@ def gpt_summary():
         f"Honors: {honors}\n"
         f"Clubs: {clubs}\n"
         f"Intended major: {major}\n\n"
-        "Provide ONLY a JSON object with the key 'advice' containing specific, actionable suggestions "
-        "to improve their college application. No other text, no summary or score."
+        "Return ONLY a JSON array of objects with keys: title, score (0-100), explanation."
     )
 
     messages = [
-        SYSTEM_PROMPT,
+        system_prompt,
         {"role": "user", "content": user_content}
     ]
 
@@ -59,29 +70,36 @@ def gpt_summary():
             model="gpt-4o-mini",
             messages=messages,
             temperature=0,
-            max_tokens=500,
+            max_tokens=700,
         )
     except Exception as e:
         return jsonify({"error": f"OpenAI API error: {str(e)}"}), 500
 
     content = response.choices[0].message.content.strip()
 
-    # Attempt to parse JSON safely
+    # Parse JSON array of category ratings
     try:
-        json_response = json.loads(content)
-        advice = json_response.get("advice")
-        if not isinstance(advice, str):
-            raise ValueError("Invalid JSON: 'advice' key missing or not a string")
-    except Exception:
+        category_ratings = json.loads(content)
+        # Validate expected structure (optional)
+        if not isinstance(category_ratings, list):
+            raise ValueError("Response is not a JSON array")
+
+        for item in category_ratings:
+            if not all(k in item for k in ("title", "score", "explanation")):
+                raise ValueError("Missing keys in category rating item")
+            if not isinstance(item["score"], (int, float)):
+                raise ValueError("Score is not a number")
+    except Exception as e:
         return jsonify({
-            "error": "Failed to parse GPT response as valid JSON with key 'advice'",
+            "error": f"Failed to parse GPT response as category ratings JSON: {str(e)}",
             "raw_response": content
         }), 500
 
     return jsonify({
         "college": college,
-        "advice": advice
+        "categoryRatings": category_ratings
     })
+
 
 
 @app.route("/analyze/stats", methods=["POST"])
