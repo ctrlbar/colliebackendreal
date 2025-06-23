@@ -1,31 +1,23 @@
 import os
-import uuid
 from flask import Flask, request, jsonify
 from openai import OpenAI
 import requests
+import json
 
 app = Flask(__name__)
 client = OpenAI()
 
-conversations = {}
-
+# Concise system prompt focusing only on improvement advice, no summary or score
 SYSTEM_PROMPT = {
     "role": "system",
-    "content": """You're Collie, an expert college advisor focused on helping students strengthen their college applications.
-
-Your job is to:
-- Analyze the student's stats in comparison to their target college
-- Identify clear *weaknesses or missing pieces*
-- Give *specific, actionable suggestions* on what to improve (e.g., "Your GPA is slightly below average for MIT; consider taking additional APs or dual enrollment courses", or "You lack leadership experience; look for a club position or start a project")
-- Avoid fluff and encouragement — focus on practical advice
-- Only include strengths if they’re necessary for contrast
-- End with a realistic next step or strategy to improve admission odds
-
-You are NOT generating a summary or acceptance likelihood, only an improvement analysis.
-"""
+    "content": (
+        "You are Collie, an expert college advisor. "
+        "Analyze the student's stats compared to their target college and "
+        "provide clear, specific, actionable advice to improve their application. "
+        "Do NOT provide any summary, acceptance likelihood, or scores. "
+        "Return ONLY a JSON object with a single key 'advice' containing a string."
+    )
 }
-
-
 
 COLLEGE_SCORECARD_API_KEY = os.getenv("COLLEGE_SCORECARD_API_KEY")
 
@@ -37,58 +29,57 @@ def gpt_summary():
 
     college = data.get("college")
     user_stats = data.get("user_stats")
+    extracurriculars = data.get("extracurriculars", "")
+    honors = data.get("honors", "")
+    clubs = data.get("clubs", "")
+    major = data.get("major", "N/A")
 
     if not college or not user_stats:
         return jsonify({"error": "Missing college or user_stats"}), 400
 
-    # Build messages for OpenAI chat completion
+    # Compose the user prompt with all info but no request for summary or scores
+    user_content = (
+        f"Analyze the student's profile compared to the college '{college}':\n"
+        f"Stats: {user_stats}\n"
+        f"Extracurriculars: {extracurriculars}\n"
+        f"Honors: {honors}\n"
+        f"Clubs: {clubs}\n"
+        f"Intended major: {major}\n\n"
+        "Provide ONLY a JSON object with the key 'advice' containing specific, actionable suggestions "
+        "to improve their college application. No other text, no summary or score."
+    )
+
     messages = [
         SYSTEM_PROMPT,
-        {
-            "role": "user",
-            "content": (
-                f"Analyze the following student stats compared to the college '{college}':\n"
-                f"{user_stats}\n\n"
-                "Provide:\n"
-                "- A numeric admission strength score from 0 (very weak) to 100 (very strong).\n"
-                "- Specific actionable suggestions to improve the application.\n"
-                "Return ONLY a JSON object with keys 'score' (int) and 'advice' (string)."
-            )
-        }
+        {"role": "user", "content": user_content}
     ]
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
-            temperature=0.3,
+            temperature=0,
             max_tokens=500,
-            stop=None,
         )
     except Exception as e:
         return jsonify({"error": f"OpenAI API error: {str(e)}"}), 500
 
-    # The GPT response content
     content = response.choices[0].message.content.strip()
 
-    # Try parsing JSON from GPT's response safely
-    import json
+    # Attempt to parse JSON safely
     try:
         json_response = json.loads(content)
-        score = json_response.get("score")
         advice = json_response.get("advice")
-        if not isinstance(score, int) or not isinstance(advice, str):
-            raise ValueError("Invalid types in GPT response JSON")
+        if not isinstance(advice, str):
+            raise ValueError("Invalid JSON: 'advice' key missing or not a string")
     except Exception:
-        # If GPT doesn't return valid JSON, fallback to raw text
         return jsonify({
-            "error": "GPT response parsing failed",
+            "error": "Failed to parse GPT response as valid JSON with key 'advice'",
             "raw_response": content
         }), 500
 
     return jsonify({
         "college": college,
-        "score": score,
         "advice": advice
     })
 
@@ -180,6 +171,7 @@ def analyze_stats():
     }
 
     return jsonify(response)
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
