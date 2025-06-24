@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify
 from openai import OpenAI
 import requests
 import json
+from gpa_scraper import scrape_college_gpa  
 
 app = Flask(__name__)
 client = OpenAI()
@@ -19,6 +20,8 @@ SYSTEM_PROMPT = {
     )
 }
 
+
+
 COLLEGE_SCORECARD_API_KEY = os.getenv("COLLEGE_SCORECARD_API_KEY")
 
 @app.route("/api/gpt-summary", methods=["POST"])
@@ -28,6 +31,16 @@ def gpt_summary():
         return jsonify({"error": "No data received"}), 400
 
     college = data.get("college")
+    scraped_gpa_result  = scrape_college_gpa(college)
+    scraped_gpa = scraped_gpa_result.get("gpa", "Not found")
+
+
+    if not scraped_gpa or "Error" in scraped_gpa or scraped_gpa == "Not found":
+        scraped_gpa = "not publicly available"
+
+    if scraped_gpa != "not publicly available" and "(" in scraped_gpa:
+        scraped_gpa = scraped_gpa.split("(")[0].strip()
+
     user_stats = data.get("user_stats")
     extracurriculars = data.get("extracurriculars", "")
     honors = data.get("honors", "")
@@ -56,9 +69,11 @@ def gpt_summary():
         f"Extracurriculars: {extracurriculars}\n"
         f"Honors: {honors}\n"
         f"Clubs: {clubs}\n"
-        f"Intended major: {major}\n\n"
+        f"Intended major: {major}\n"
+        f"Known GPA for {college}: {scraped_gpa}\n\n"
         "Return ONLY a JSON array of objects with keys: title, score (0-100), explanation."
     )
+
 
     messages = [
         system_prompt,
