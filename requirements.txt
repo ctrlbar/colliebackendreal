@@ -2,3 +2,4 @@ flask
 gunicorn
 openai==1.86.0
 requests
+selenium
