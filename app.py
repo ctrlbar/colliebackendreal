@@ -20,8 +20,6 @@ SYSTEM_PROMPT = {
     )
 }
 
-
-
 COLLEGE_SCORECARD_API_KEY = os.getenv("COLLEGE_SCORECARD_API_KEY")
 
 @app.route("/api/gpt-summary", methods=["POST"])
@@ -32,14 +30,22 @@ def gpt_summary():
 
     college = data.get("college")
     scraped_gpa_result  = scrape_college_gpa(college)
-    scraped_gpa = scraped_gpa_result.get("gpa", "Not found")
+    scraped_gpa = scraped_gpa_result.get("gpa")
 
-
-    if not scraped_gpa or "Error" in scraped_gpa or scraped_gpa == "Not found":
+    if scraped_gpa is None or (
+        isinstance(scraped_gpa, str) and (
+            "error" in scraped_gpa.lower() or
+            "not found" in scraped_gpa.lower()
+        )
+    ):
         scraped_gpa = "not publicly available"
 
-    if scraped_gpa != "not publicly available" and "(" in scraped_gpa:
-        scraped_gpa = scraped_gpa.split("(")[0].strip()
+    # Try converting to float if it's a string like "3.9"
+    if isinstance(scraped_gpa, str):
+        try:
+            scraped_gpa = float(scraped_gpa)
+        except ValueError:
+            scraped_gpa = "not publicly available"
 
     user_stats = data.get("user_stats")
     extracurriculars = data.get("extracurriculars", "")
@@ -73,7 +79,6 @@ def gpt_summary():
         f"Known GPA for {college}: {scraped_gpa}\n\n"
         "Return ONLY a JSON array of objects with keys: title, score (0-100), explanation."
     )
-
 
     messages = [
         system_prompt,
@@ -114,7 +119,6 @@ def gpt_summary():
         "college": college,
         "categoryRatings": category_ratings
     })
-
 
 
 @app.route("/analyze/stats", methods=["POST"])

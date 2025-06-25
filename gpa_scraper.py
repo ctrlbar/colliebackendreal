@@ -2,6 +2,12 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 import time
+import re
+
+def extract_gpa_number(text: str) -> float | None:
+    """Extracts GPA float value from a string like 'GPA: 3.9 (unweighted)'."""
+    match = re.search(r"(\d\.\d{1,2})", text)
+    return float(match.group(1)) if match else None
 
 def scrape_college_gpa(college_name: str) -> dict:
     slug = college_name.strip().replace(" ", "-")
@@ -21,33 +27,35 @@ def scrape_college_gpa(college_name: str) -> dict:
         except:
             pass
 
-        time.sleep(3)  # Let the page fully load
+        time.sleep(3)  # Allow page to fully render
 
-        # NEW: Try locating GPA in TitleValue_value__1JT0d class
+        # First: Search common GPA block with semantic label
         gpa_elements = driver.find_elements(By.CLASS_NAME, "TitleValue_value__1JT0d")
         for elem in gpa_elements:
             if "GPA" in elem.text:
-                return {
-                    "college": college_name,
-                    "gpa": elem.text.strip()
-                }
+                gpa_value = extract_gpa_number(elem.text)
+                if gpa_value:
+                    return {
+                        "college": college_name,
+                        "gpa": gpa_value
+                    }
 
-        # Fallback: try label/value table pairing method
+        # Second: Fallback to table label/value pairing
         labels = driver.find_elements(By.CLASS_NAME, "cd-table__cell-label")
         values = driver.find_elements(By.CLASS_NAME, "cd-table__cell-value")
 
         for label, value in zip(labels, values):
             if "GPA" in label.text:
-                return {
-                    "college": college_name,
-                    "gpa": value.text.strip()
-                }
+                gpa_value = extract_gpa_number(value.text)
+                if gpa_value:
+                    return {
+                        "college": college_name,
+                        "gpa": gpa_value
+                    }
 
         return {"college": college_name, "gpa": "Not found"}
 
     except Exception as e:
-        return {"error": str(e)}
+        return {"college": college_name, "error": str(e)}
     finally:
         driver.quit()
-
-
