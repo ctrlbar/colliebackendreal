@@ -32,6 +32,9 @@ def gpt_summary():
     scraped_gpa_result  = scrape_college_gpa(college)
     scraped_gpa = scraped_gpa_result.get("gpa")
 
+    print(f"[DEBUG] Scraped GPA for {college}: {scraped_gpa}")
+
+
     if scraped_gpa is None or (
         isinstance(scraped_gpa, str) and (
             "error" in scraped_gpa.lower() or
@@ -96,6 +99,8 @@ def gpt_summary():
         return jsonify({"error": f"OpenAI API error: {str(e)}"}), 500
 
     content = response.choices[0].message.content.strip()
+
+    print("[DEBUG] GPT Response:\n", content)
 
     # Parse JSON array of category ratings
     try:
@@ -208,6 +213,7 @@ def analyze_stats():
     }
 
     return jsonify(response)
+
 
 
 if __name__ == "__main__":

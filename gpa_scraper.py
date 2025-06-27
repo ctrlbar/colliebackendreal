@@ -17,6 +17,8 @@ def scrape_college_gpa(college_name: str) -> dict:
     options.add_argument("--headless")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")  # avoid /dev/shm issues on Heroku
+    options.add_argument("--window-size=1920,1080")  # sometimes helps with rendering
 
     driver = webdriver.Chrome(options=options)
     driver.get(url)
