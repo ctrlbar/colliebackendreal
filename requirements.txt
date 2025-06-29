@@ -3,3 +3,6 @@ gunicorn
 openai==1.86.0
 requests
 selenium
+beautifulsoup4
+json
+rapidfuzz

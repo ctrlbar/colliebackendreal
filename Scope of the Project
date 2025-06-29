@@ -1,0 +1,35 @@
+Scope of the Project
+-Designed for high school students to help them understand their chances of getting into a college for their chosen major.
+-The app provides the following features:
+	1. Calculates the probability of admission for a specific major at a selected college based on the student's profile.
+	2. Offers feedback on how to improve and fill any gaps in the application.
+	3. Includes a personalized chatbot to answer custom queries.
+
+Collie Vs ChatGPT
+🧠 1. Structured Input → Tailored Output
+-Collie collects structured data (GPA, SAT, APs, major, activities) in a guided way—ensuring complete, relevant, and context-rich inputs.
+-ChatGPT alone relies on what the student remembers to share in a casual chat, often missing key details needed for accurate guidance.
+
+📊 2. Focused on College Admissions
+-Collie is purpose-built for evaluating admissions chances, with logic, models, and prompts designed specifically for this task.
+-ChatGPT is general-purpose and lacks access to Collie’s custom logic, statistical models, or databases (e.g. College Scorecard API) unless manually prompted every time.
+
+🧭 3. Personalized Recommendations
+-Collie gives actionable feedback—like how to improve SAT scores or strengthen extracurriculars for a specific college and major.
+-ChatGPT can give general advice, but it won’t automatically compare the student’s profile to school-specific benchmarks unless explicitly prompted.
+
+💬 4. Chatbot Integration Still Adds Value
+-Collie includes ChatGPT as a personalized bot—but now it works in the context of already knowing the student’s data. This creates a smarter assistant that doesn’t need to ask background questions repeatedly.
+
+🔒 5. Controlled Experience
+-You decide how the user flows through the app—limiting confusion, distraction, or off-topic questions.
+-ChatGPT in raw form can veer off-topic or overwhelm students who don't know how to ask the "right" question.
+
+✅ Summary:
+Collie turns ChatGPT into a college counselor. It enhances the experience by adding structure, focus, and intelligent customization—something that ChatGPT alone, used informally, cannot replicate as effectively.
+
+SDLC and Interview prep
+- ✅ Basic SDLC Interview Questions
+- ✅ Basic Agile Interview Questions
+
+
