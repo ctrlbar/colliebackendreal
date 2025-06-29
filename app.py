@@ -38,10 +38,21 @@ def gpt_summary():
     if not college or not user_stats:
         return jsonify({"error": "Missing college or user_stats"}), 400
 
-    # Attempt to scrape GPA
-    scraped_gpa_result = scrape_college_gpa(college)
-    scraped_gpa = scraped_gpa_result.get("gpa")
-    print(f"[DEBUG] Scraped GPA for {college}: {scraped_gpa}")
+    # Extract user's GPA safely
+    user_gpa_str = user_stats.get("GPA")
+    try:
+        user_gpa = float(user_gpa_str) if user_gpa_str else "unknown"
+    except ValueError:
+        user_gpa = "unknown"
+
+    # Robustly call scraper and convert scraped_gpa to float
+    try:
+        scraped_gpa_result = scrape_college_gpa(college)
+        scraped_gpa = scraped_gpa_result.get("gpa")
+        scraped_gpa = float(scraped_gpa)
+    except Exception as e:
+        print(f"[DEBUG] scrape_college_gpa error or invalid GPA: {e}")
+        scraped_gpa = None
 
     # Fallback logic using admission rate if GPA is missing or unusable
     if scraped_gpa is None or (
