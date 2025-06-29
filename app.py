@@ -29,27 +29,6 @@ def gpt_summary():
         return jsonify({"error": "No data received"}), 400
 
     college = data.get("college")
-    scraped_gpa_result  = scrape_college_gpa(college)
-    scraped_gpa = scraped_gpa_result.get("gpa")
-
-    print(f"[DEBUG] Scraped GPA for {college}: {scraped_gpa}")
-
-
-    if scraped_gpa is None or (
-        isinstance(scraped_gpa, str) and (
-            "error" in scraped_gpa.lower() or
-            "not found" in scraped_gpa.lower()
-        )
-    ):
-        scraped_gpa = "not publicly available"
-
-    # Try converting to float if it's a string like "3.9"
-    if isinstance(scraped_gpa, str):
-        try:
-            scraped_gpa = float(scraped_gpa)
-        except ValueError:
-            scraped_gpa = "not publicly available"
-
     user_stats = data.get("user_stats")
     extracurriculars = data.get("extracurriculars", "")
     honors = data.get("honors", "")
@@ -59,7 +38,61 @@ def gpt_summary():
     if not college or not user_stats:
         return jsonify({"error": "Missing college or user_stats"}), 400
 
-    # New system prompt asks GPT to return detailed category ratings
+    # Attempt to scrape GPA
+    scraped_gpa_result = scrape_college_gpa(college)
+    scraped_gpa = scraped_gpa_result.get("gpa")
+    print(f"[DEBUG] Scraped GPA for {college}: {scraped_gpa}")
+
+    # Fallback logic using admission rate if GPA is missing or unusable
+    if scraped_gpa is None or (
+        isinstance(scraped_gpa, str) and (
+            "error" in scraped_gpa.lower() or
+            "not found" in scraped_gpa.lower()
+        )
+    ):
+        # Fallback to estimate from admission rate
+        search_url = "https://api.data.gov/ed/collegescorecard/v1/schools"
+        params = {
+            "api_key": COLLEGE_SCORECARD_API_KEY,
+            "school.name": college,
+            "fields": "id,school.name",
+            "per_page": 1
+        }
+
+        resp = requests.get(search_url, params=params)
+        results = resp.json().get("results")
+        if results:
+            college_id = results[0].get("id")
+            info_url = "https://api.data.gov/ed/collegescorecard/v1/schools"
+            info_params = {
+                "api_key": COLLEGE_SCORECARD_API_KEY,
+                "id": college_id,
+                "fields": "latest.admissions.admission_rate.overall"
+            }
+
+            info_resp = requests.get(info_url, params=info_params)
+            info_data = info_resp.json().get("results", [{}])[0]
+            admission_rate = info_data.get("latest.admissions.admission_rate.overall")
+
+            if admission_rate is not None:
+                if admission_rate < 0.15:
+                    scraped_gpa = 4.2
+                elif admission_rate < 0.40:
+                    scraped_gpa = 4.0
+                else:
+                    scraped_gpa = 3.7
+            else:
+                scraped_gpa = "not publicly available"
+        else:
+            scraped_gpa = "not publicly available"
+
+    # Try converting to float if possible
+    if isinstance(scraped_gpa, str):
+        try:
+            scraped_gpa = float(scraped_gpa)
+        except ValueError:
+            scraped_gpa = "not publicly available"
+
     system_prompt = {
         "role": "system",
         "content": (
@@ -67,6 +100,7 @@ def gpt_summary():
             "Analyze the student's stats compared to their target college and provide "
             "a JSON array of category ratings for the application. Each object must have: "
             "\"title\" (string), \"score\" (0-100 number), and \"explanation\" (string). "
+            "The 'Academics' explanation must clearly compare the student's GPA and SAT (if available) to the average GPA and SAT of the target college. "
             "Categories include: Academics, Extracurriculars, Honors, Uniqueness, and Impact. "
             "Return ONLY the JSON array, no extra text."
         )
@@ -79,7 +113,7 @@ def gpt_summary():
         f"Honors: {honors}\n"
         f"Clubs: {clubs}\n"
         f"Intended major: {major}\n"
-        f"Known GPA for {college}: {scraped_gpa}\n\n"
+        f"The student GPA is {user_gpa}. The average GPA at {college} is {scraped_gpa}.\n\n"
         "Return ONLY a JSON array of objects with keys: title, score (0-100), explanation."
     )
 
@@ -99,16 +133,12 @@ def gpt_summary():
         return jsonify({"error": f"OpenAI API error: {str(e)}"}), 500
 
     content = response.choices[0].message.content.strip()
-
     print("[DEBUG] GPT Response:\n", content)
 
-    # Parse JSON array of category ratings
     try:
         category_ratings = json.loads(content)
-        # Validate expected structure (optional)
         if not isinstance(category_ratings, list):
             raise ValueError("Response is not a JSON array")
-
         for item in category_ratings:
             if not all(k in item for k in ("title", "score", "explanation")):
                 raise ValueError("Missing keys in category rating item")
@@ -129,7 +159,6 @@ def gpt_summary():
 @app.route("/analyze/stats", methods=["POST"])
 def analyze_stats():
     data = request.get_json()
-
     if not data:
         return jsonify({"error": "No data received"}), 400
 
@@ -156,7 +185,6 @@ def analyze_stats():
         return jsonify({"error": f"College '{college_name}' not found"}), 404
 
     college_id = results[0].get("id")
-
     info_url = "https://api.data.gov/ed/collegescorecard/v1/schools"
     info_params = {
         "api_key": COLLEGE_SCORECARD_API_KEY,
@@ -179,17 +207,17 @@ def analyze_stats():
 
     if admission_rate is not None:
         if admission_rate < 0.15:
-            estimated_gpa = 3.9
+            estimated_gpa = 4.2
             estimated_sat = estimated_sat or 1450
             expected_class_rank_percentile = "top 5%"
             expected_num_aps = "10+"
         elif admission_rate < 0.40:
-            estimated_gpa = 3.7
+            estimated_gpa = 4.0
             estimated_sat = estimated_sat or 1300
             expected_class_rank_percentile = "top 10–20%"
             expected_num_aps = "6–9"
         else:
-            estimated_gpa = 3.3
+            estimated_gpa = 3.7
             estimated_sat = estimated_sat or 1150
             expected_class_rank_percentile = "top 30–40%"
             expected_num_aps = "3–5"
@@ -213,7 +241,6 @@ def analyze_stats():
     }
 
     return jsonify(response)
-
 
 
 if __name__ == "__main__":
