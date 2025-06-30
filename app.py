@@ -13,9 +13,7 @@ SYSTEM_PROMPT = {
     "role": "system",
     "content": (
         "You are Collie, an expert college advisor. "
-        "Analyze the student's stats compared to their target college and "
-        "provide clear, specific, actionable advice to improve their application. "
-        "Do NOT provide any summary, acceptance likelihood, or scores. "
+        "Answer the user's question about college admissions and be as concise and efficient as possible."
         "Return ONLY a JSON object with a single key 'advice' containing a string."
     )
 }
@@ -175,6 +173,61 @@ def gpt_summary():
         "college": college,
         "categoryRatings": category_ratings
     })
+
+@app.route("/ask_advice", methods=["POST"])
+def ask_advice():
+    data = request.get_json()
+
+    college = data.get("college", "")
+    major = data.get("major", "")
+    user_stats = data.get("user_stats", {})
+    extracurriculars = data.get("extracurriculars", "")
+    honors = data.get("honors", "")
+    clubs = data.get("clubs", "")
+    question = data.get("question", "")
+
+    if not question:
+        return jsonify({"error": "No question provided"}), 400
+
+    user_prompt = (
+        f"College: {college}\n"
+        f"Major: {major}\n"
+        f"Stats: {user_stats}\n"
+        f"Extracurriculars: {extracurriculars}\n"
+        f"Honors: {honors}\n"
+        f"Clubs: {clubs}\n"
+        f"Question: {question}\n"
+        "Respond ONLY with a JSON object like {\"advice\": \"...\"}."
+    )
+
+    messages = [SYSTEM_PROMPT, {"role": "user", "content": user_prompt}]
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=500,
+        )
+        content = response.choices[0].message.content.strip()
+
+        # Strip code block formatting if present
+        if content.startswith("```json") and content.endswith("```"):
+            content = content[7:-3].strip()
+        elif content.startswith("```") and content.endswith("```"):
+            content = content[3:-3].strip()
+
+        advice_json = json.loads(content)
+        if "advice" not in advice_json:
+            raise ValueError("Missing 'advice' in GPT response")
+
+        return jsonify(advice_json)
+
+    except Exception as e:
+        return jsonify({
+            "error": f"Failed to process GPT response: {str(e)}",
+            "raw_response": content if 'content' in locals() else ""
+        }), 500
 
 
 @app.route("/analyze/stats", methods=["POST"])
