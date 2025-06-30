@@ -146,6 +146,14 @@ def gpt_summary():
         return jsonify({"error": f"OpenAI API error: {str(e)}"}), 500
 
     content = response.choices[0].message.content.strip()
+    
+        # Remove markdown code block wrappers (```json ... ```)
+    if content.startswith("```json") and content.endswith("```"):
+        content = content[7:-3].strip()
+    elif content.startswith("```") and content.endswith("```"):
+        content = content[3:-3].strip()
+
+    
     print("[DEBUG] GPT Response:\n", content)
 
     try:
