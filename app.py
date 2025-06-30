@@ -124,7 +124,9 @@ def gpt_summary():
         f"Honors: {honors}\n"
         f"Clubs: {clubs}\n"
         f"Intended major: {major}\n"
-        f"The student GPA is {user_gpa}. The average GPA at {college} is {scraped_gpa}.\n\n"
+        f"The student GPA is {user_gpa} (unweighted, 4.0 scale). "
+        f"The average GPA at {college} is {scraped_gpa} (may be weighted or unweighted depending on source).\n\n"
+        "Note: The student's GPA is unweighted. If the college GPA appears higher than 4.0, it may be weighted. Adjust your analysis accordingly."
         "Return ONLY a JSON array of objects with keys: title, score (0-100), explanation."
     )
 
